@@ -58,27 +58,27 @@
         (loop []
           (when-let [entry (.getNextJarEntry jis)]
             ;(println "entry:" (.getName entry) (.isDirectory entry))
-            (let [out-file (jio/file out-dir (.getName entry))]
-              (jio/make-parents out-file)
-              (when-not (or (.isDirectory entry) (exclude-from-uber? (.getName entry)))
-                (if (.exists out-file)
-                  ;; conflicting file, resolve
-                  (cond
-                    (#{"data_readers.clj" "data_readers.cljc"} (.getName out-file))
-                    (let [existing-readers (edn/read-string (slurp out-file))
-                          baos (ByteArrayOutputStream. 1024)
-                          _ (copy-stream! jis baos buffer)
-                          append-readers (edn/read-string (.toString baos "UTF-8"))
-                          new-readers (merge existing-readers append-readers)]
-                      (spit out-file (with-out-str (pprint/pprint new-readers))))
+            (when-not (str/starts-with? (.getName entry) "META-INF")
+              (let [out-file (jio/file out-dir (.getName entry))]
+                (jio/make-parents out-file)
+                (when-not (or (.isDirectory entry) (exclude-from-uber? (.getName entry)))
+                  (if (.exists out-file)
+                    ;; conflicting file, resolve
+                    (cond
+                      (#{"data_readers.clj" "data_readers.cljc"} (.getName out-file))
+                      (let [existing-readers (edn/read-string (slurp out-file))
+                            baos (ByteArrayOutputStream. 1024)
+                            _ (copy-stream! jis baos buffer)
+                            append-readers (edn/read-string (.toString baos "UTF-8"))
+                            new-readers (merge existing-readers append-readers)]
+                        (spit out-file (with-out-str (pprint/pprint new-readers))))
 
-                    :else
-                    nil ;; TODO: (println "CONFLICT: " (.getName entry))
-                    )
-                  (with-open [output (BufferedOutputStream. (FileOutputStream. out-file))]
-                    (copy-stream! jis output buffer)
-                    (Files/setLastModifiedTime (.toPath out-file) (.getLastModifiedTime entry)))))
-              (recur))))))
+                      :else
+                      (println "CONFLICT: " (.getName entry)))
+                    (with-open [output (BufferedOutputStream. (FileOutputStream. out-file))]
+                      (copy-stream! jis output buffer)
+                      (Files/setLastModifiedTime (.toPath out-file) (.getLastModifiedTime entry)))))))
+            (recur)))))
     (file/copy-contents lib-file out-dir)))
 
 (defn- remove-optional
